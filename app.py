@@ -1,8 +1,15 @@
 import os
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+
+try:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo("Asia/Kolkata")
+except ImportError:
+    IST = None 
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'hackathon-secret-key'
@@ -14,13 +21,13 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# --- MODELS ---
 
+# ================= MODELS =================
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
-    role = db.Column(db.String(50)) 
+    role = db.Column(db.String(50))
 
 class Team(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -31,37 +38,40 @@ class Equipment(db.Model):
     name = db.Column(db.String(100), nullable=False)
     serial_number = db.Column(db.String(100))
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'))
-    status = db.Column(db.String(50), default='Active') 
+    team = db.relationship('Team', backref='equipments')
+    status = db.Column(db.String(50), default='Active')
     requests = db.relationship('MaintenanceRequest', backref='equipment', lazy=True)
 
 class MaintenanceRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subject = db.Column(db.String(200), nullable=False)
-    request_type = db.Column(db.String(50)) 
-    status = db.Column(db.String(50), default='New') 
+    request_type = db.Column(db.String(50))
+    status = db.Column(db.String(50), default='New')
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'))
-    scheduled_date = db.Column(db.Date, nullable=True) 
+    scheduled_date = db.Column(db.Date, nullable=True)
     technician_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    technician = db.relationship('User', backref='assigned_requests')
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    resolved_at = db.Column(db.DateTime, nullable=True)
 
-# --- LOGIN LOGIC ---
 
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
+
+# ================= ROUTES =================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
-        
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('dashboard'))
         else:
             flash('Login failed. Check credentials.', 'danger')
-            
     return render_template('login.html')
 
 @app.route('/logout')
@@ -70,46 +80,47 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-# --- MAIN WORKFLOWS ---
-
 @app.route('/')
 @login_required
 def dashboard():
-    # Fetch requests by status for Kanban columns
     new_reqs = MaintenanceRequest.query.filter_by(status='New').all()
     progress_reqs = MaintenanceRequest.query.filter_by(status='In Progress').all()
     repaired_reqs = MaintenanceRequest.query.filter_by(status='Repaired').all()
     scrap_reqs = MaintenanceRequest.query.filter_by(status='Scrap').all()
-    
-    # Fetch equipment for the dropdown in the "Create Request" modal
-    equipments = Equipment.query.filter_by(status='Active').all()
-    
-    return render_template('dashboard.html', 
-                         new=new_reqs, 
-                         progress=progress_reqs, 
-                         repaired=repaired_reqs, 
-                         scrap=scrap_reqs,
-                         equipments=equipments)
+    equipments = Equipment.query.all()
+    technicians = User.query.all()
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    return render_template('dashboard.html', new=new_reqs, progress=progress_reqs, repaired=repaired_reqs, scrap=scrap_reqs, equipments=equipments, technicians=technicians, today_date=today_date, current_user=current_user)
 
-# THIS IS THE MISSING FUNCTION THAT CAUSED YOUR ERROR
 @app.route('/create_request', methods=['POST'])
 @login_required
 def create_request():
+    equipment_id = request.form.get('equipment_id')
     subject = request.form.get('subject')
-    equip_id = request.form.get('equipment_id')
     req_type = request.form.get('request_type')
-    
-    new_req = MaintenanceRequest(
-        subject=subject,
-        request_type=req_type,
-        equipment_id=equip_id,
-        status='New',
-        technician_id=current_user.id 
-    )
-    
-    db.session.add(new_req)
+    date_str = request.form.get('scheduled_date')
+    tech_id = request.form.get('technician_id')
+    scheduled_date = None
+    if date_str:
+        try: scheduled_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except: pass
+    assigned_tech = int(tech_id) if tech_id else None
+    new_request = MaintenanceRequest(subject=subject, request_type=req_type, equipment_id=equipment_id, status='New', scheduled_date=scheduled_date, technician_id=assigned_tech)
+    db.session.add(new_request)
     db.session.commit()
-    flash('New maintenance request created!', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/assign_manual/<int:req_id>', methods=['POST'])
+@login_required
+def assign_manual(req_id):
+    req = MaintenanceRequest.query.get_or_404(req_id)
+    tech_id = request.form.get('technician_id')
+    if tech_id:
+        req.technician_id = int(tech_id)
+        if req.status == 'New': req.status = 'In Progress'
+        if not req.created_at: req.created_at = datetime.now()
+        db.session.commit()
+        flash('Technician assigned successfully!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/move/<int:req_id>/<string:new_status>')
@@ -117,14 +128,21 @@ def create_request():
 def move_request(req_id, new_status):
     req = MaintenanceRequest.query.get_or_404(req_id)
     req.status = new_status
-    
-    # Scrap Logic
+    if new_status == 'Repaired' and req.resolved_at is None: req.resolved_at = datetime.now()
     if new_status == 'Scrap':
         equip = Equipment.query.get(req.equipment_id)
         equip.status = 'Scrapped / Unusable'
         flash(f'Equipment {equip.name} marked as Scrapped.', 'warning')
-
     db.session.commit()
+    return redirect(url_for('dashboard'))
+
+@app.route('/archive/<int:req_id>')
+@login_required
+def archive_request(req_id):
+    req = MaintenanceRequest.query.get_or_404(req_id)
+    db.session.delete(req)
+    db.session.commit()
+    flash('Ticket archived/removed.', 'info')
     return redirect(url_for('dashboard'))
 
 @app.route('/equipment')
@@ -133,27 +151,91 @@ def equipment_list():
     items = Equipment.query.all()
     return render_template('equipment.html', items=items)
 
-# --- SETUP SCRIPT ---
+# 🔥 NEW ROUTE for View Requests Button
+@app.route('/equipment/<int:id>/requests')
+@login_required
+def equipment_requests(id):
+    equip = Equipment.query.get_or_404(id)
+    reqs = MaintenanceRequest.query.filter_by(equipment_id=id).all()
+    return render_template('equipment_requests.html', equipment=equip, requests=reqs)
+
+@app.route("/calendar")
+@login_required
+def calendar_page():
+    return render_template("calendar.html")
+
+@app.route("/calendar/events")
+@login_required
+def calendar_events():
+    events = []
+    requests = MaintenanceRequest.query.all()
+    for r in requests:
+        if r.status == "Scrap": continue
+        event_date = r.scheduled_date or r.created_at.date()
+        
+        # Color Logic
+        evt_color = '#ffc107' # Yellow
+        txt_color = 'black'
+        
+        if r.status == 'In Progress':
+            evt_color = '#0d6efd' # Blue
+            txt_color = 'white'
+        elif r.status == 'Repaired':
+            evt_color = '#198754' # Green (Fixed)
+            txt_color = 'white'
+
+        events.append({
+            "id": r.id,
+            "title": f"{r.subject} ({r.technician.username if r.technician else 'Unassigned'})",
+            "start": event_date.strftime("%Y-%m-%d"),
+            "allDay": True,
+            "color": evt_color,
+            "textColor": txt_color,
+            "url": f"/move/{r.id}/In Progress"
+        })
+    return jsonify(events)
+
 def create_dummy_data():
     with app.app_context():
         db.create_all()
-        if not User.query.filter_by(username='admin').first():
-            # Create Default Admin
-            admin = User(username='admin', password=generate_password_hash('admin123'), role='Manager')
-            db.session.add(admin)
-            
-            # Create Teams
-            t1 = Team(name='Mechanics')
-            t2 = Team(name='IT Support')
-            db.session.add_all([t1, t2])
-            db.session.commit()
+        # Users
+        users = ['admin', 'Alex_Tech', 'Bob_Mechanic', 'Charlie_IT']
+        for name in users:
+            if not User.query.filter_by(username=name).first():
+                u = User(username=name, password=generate_password_hash('admin123' if name=='admin' else '1234'), role='Manager' if name=='admin' else 'Technician')
+                db.session.add(u)
+        
+        # Teams
+        teams = ['Mechanics', 'IT Support', 'Production', 'Logistics']
+        for tname in teams:
+            if not Team.query.filter_by(name=tname).first():
+                db.session.add(Team(name=tname))
+        db.session.commit()
+        
+        # 🔥 FORCE ADD EQUIPMENT
+        t_mech = Team.query.filter_by(name='Mechanics').first()
+        t_it = Team.query.filter_by(name='IT Support').first()
+        t_prod = Team.query.filter_by(name='Production').first()
+        t_log = Team.query.filter_by(name='Logistics').first()
 
-            # Create Equipment
-            e1 = Equipment(name='CNC Machine 01', serial_number='CNC-99', team_id=t1.id)
-            e2 = Equipment(name='Server Rack A', serial_number='SRV-01', team_id=t2.id)
-            db.session.add_all([e1, e2])
-            db.session.commit()
-            print("Database initialized.")
+        equip_list = [
+            ('CNC Machine 01', 'CNC-99', t_prod),
+            ('Server Rack A', 'SRV-01', t_it),
+            ('Hydraulic Press', 'HYD-500', t_prod),
+            ('3D Printer Pro', '3DP-X1', t_it),
+            ('Forklift Toyota', 'FL-99', t_log),
+            ('Conveyor Belt A', 'CONV-A', t_mech),
+            ('Welding Robot', 'WELD-R2', t_prod),
+            ('Office WiFi Router', 'NET-05', t_it)
+        ]
+
+        for name, serial, team in equip_list:
+            if not Equipment.query.filter_by(name=name).first():
+                db.session.add(Equipment(name=name, serial_number=serial, team_id=team.id))
+                print(f"Added Missing Asset: {name}")
+
+        db.session.commit()
+        print("DB Initialized.")
 
 if __name__ == '__main__':
     create_dummy_data()
