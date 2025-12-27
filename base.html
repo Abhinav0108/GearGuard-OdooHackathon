@@ -22,7 +22,6 @@
             min-height: 100vh;
         }
 
-        /* Navbar */
         .navbar {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
@@ -32,15 +31,9 @@
         }
         .navbar-brand { font-weight: 700; color: #4a5568 !important; }
 
-        /* Animation Keyframes (Kept for other elements if needed) */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* 🔥 IMPORTANT: Higher Z-Index for Modal to sit on top of everything */
-        .modal-backdrop { z-index: 1050 !important; }
-        .modal { z-index: 1060 !important; }
+        /* 🔥 FIX: Ensure Modal sits on top */
+        .modal-backdrop { z-index: 1040 !important; }
+        .modal { z-index: 1055 !important; }
     </style>
 </head>
 
