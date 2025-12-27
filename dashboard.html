@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Maintenance Kanban</h2>
+    <button class="btn btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#createModal">
+        + Report Issue
+    </button>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-3">
+        <h5 class="bg-secondary text-white p-2 rounded">New</h5>
+        {% for req in new %}
+        <div class="card mb-2 shadow-sm">
+            <div class="card-body">
+                <h6>{{ req.subject }}</h6>
+                <span class="badge bg-info text-dark">{{ req.request_type }}</span>
+                <small class="d-block text-muted mt-1">Equip: {{ req.equipment.name }}</small>
+                <div class="mt-2">
+                    <a href="/move/{{ req.id }}/In Progress" class="btn btn-sm btn-primary w-100">Start Job -></a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-3">
+        <h5 class="bg-primary text-white p-2 rounded">In Progress</h5>
+        {% for req in progress %}
+        <div class="card mb-2 shadow-sm border-primary">
+            <div class="card-body">
+                <h6>{{ req.subject }}</h6>
+                <small class="text-muted">{{ req.equipment.name }}</small>
+                <div class="mt-2 d-flex gap-1">
+                    <a href="/move/{{ req.id }}/Repaired" class="btn btn-sm btn-success flex-grow-1">✓ Done</a>
+                    <a href="/move/{{ req.id }}/Scrap" class="btn btn-sm btn-danger">X Scrap</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-3">
+        <h5 class="bg-success text-white p-2 rounded">Repaired</h5>
+        {% for req in repaired %}
+        <div class="card mb-2 shadow-sm opacity-75">
+            <div class="card-body">
+                <h6 class="text-decoration-line-through">{{ req.subject }}</h6>
+                <small class="text-success fw-bold">Fixed</small>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-3">
+        <h5 class="bg-danger text-white p-2 rounded">Scrap</h5>
+        {% for req in scrap %}
+        <div class="card mb-2 shadow-sm bg-light">
+            <div class="card-body">
+                <h6 class="text-danger">{{ req.subject }}</h6>
+                <small>Equip: {{ req.equipment.name }}</small>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">Report Maintenance Issue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('create_request') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Issue Description</label>
+                        <input type="text" name="subject" class="form-control" placeholder="e.g. Screen not working" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Select Equipment</label>
+                        <select name="equipment_id" class="form-select">
+                            {% for item in equipments %}
+                                <option value="{{ item.id }}">{{ item.name }} ({{ item.serial_number }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label>Type</label>
+                        <select name="request_type" class="form-select">
+                            <option value="Corrective">Breakdown (Corrective)</option>
+                            <option value="Preventive">Routine Checkup</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-dark">Create Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

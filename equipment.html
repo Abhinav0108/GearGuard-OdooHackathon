@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Equipment Database</h2>
+<table class="table table-hover mt-3">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Serial #</th>
+            <th>Status</th>
+            <th>Maintenance</th> </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr class="{{ 'table-danger' if item.status != 'Active' else '' }}">
+            <td>{{ item.name }}</td>
+            <td>{{ item.serial_number }}</td>
+            <td>{{ item.status }}</td>
+            <td>
+                <button class="btn btn-outline-info position-relative">
+                    View Requests
+                    {% if item.requests|length > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        {{ item.requests|length }}
+                    </span>
+                    {% endif %}
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
