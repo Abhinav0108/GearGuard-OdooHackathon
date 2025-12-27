@@ -1,32 +1,47 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Equipment Database</h2>
-<table class="table table-hover mt-3">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Serial #</th>
-            <th>Status</th>
-            <th>Maintenance</th> </tr>
-    </thead>
-    <tbody>
-        {% for item in items %}
-        <tr class="{{ 'table-danger' if item.status != 'Active' else '' }}">
-            <td>{{ item.name }}</td>
-            <td>{{ item.serial_number }}</td>
-            <td>{{ item.status }}</td>
-            <td>
-                <button class="btn btn-outline-info position-relative">
-                    View Requests
-                    {% if item.requests|length > 0 %}
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        {{ item.requests|length }}
-                    </span>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Equipment Database</h2>
+    <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="card border-0 shadow-sm p-0 overflow-hidden" style="border-radius: 12px;">
+    <table class="table table-hover mb-0">
+        <thead class="bg-light">
+            <tr>
+                <th class="p-3">Asset Name</th>
+                <th class="p-3">Serial #</th>
+                <th class="p-3">Department</th>
+                <th class="p-3">Status</th>
+                <th class="p-3 text-end">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr class="align-middle">
+                <td class="p-3 fw-bold">{{ item.name }}</td>
+                <td class="p-3 text-muted">{{ item.serial_number }}</td>
+                <td class="p-3"><span class="badge bg-secondary">{{ item.team.name }}</span></td>
+                <td class="p-3">
+                    {% if item.status == 'Active' %}
+                        <span class="text-success fw-bold">● Active</span>
+                    {% else %}
+                        <span class="text-danger fw-bold">● Scrapped</span>
                     {% endif %}
-                </button>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+                </td>
+                <td class="p-3 text-end">
+                    <a href="{{ url_for('equipment_requests', id=item.id) }}" class="btn btn-outline-primary btn-sm position-relative">
+                        View Requests
+                        {% if item.requests|length > 0 %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            {{ item.requests|length }}
+                        </span>
+                        {% endif %}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}
