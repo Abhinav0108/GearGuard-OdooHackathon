@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+    <a href="{{ url_for('equipment_list') }}" class="btn btn-outline-secondary me-3">← Back</a>
+    <div>
+        <h2 class="mb-0">{{ equipment.name }} <span class="text-muted h4">({{ equipment.serial_number }})</span></h2>
+        <p class="text-muted mb-0">Maintenance History Log</p>
+    </div>
+</div>
+{% if requests %}
+    <div class="row g-3">
+        {% for req in requests %}
+        <div class="col-md-4">
+            <div class="card p-3 h-100">
+                <div class="d-flex justify-content-between">
+                    <span class="badge bg-{{ 'success' if req.status == 'Repaired' else 'warning' }}">{{ req.status }}</span>
+                    <small class="text-muted">{{ req.created_at.strftime('%Y-%m-%d') }}</small>
+                </div>
+                <h5 class="mt-2 fw-bold">{{ req.subject }}</h5>
+                <div class="d-flex align-items-center gap-2 mt-auto pt-3 border-top">
+                    <small class="fw-bold">Tech: {{ req.technician.username if req.technician else 'Unassigned' }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info text-center py-5"><h4>No maintenance records found.</h4></div>
+{% endif %}
+{% endblock %}
